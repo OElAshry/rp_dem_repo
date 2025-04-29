@@ -6,4 +6,4 @@ The "Inputs" folder contains the LIGGGHTS scripts that were used to run the simu
 3. 600 - represents 600 RPM
 4. r6 - represents radius value used in conjunction with r0 (BINARY EXCLUSIVE)
 
-The Python script used to generate and submit the simulation script has also been included within the Inputs folder.
+The Python script used to analyse the raw data have been uploaded to the Codes directory.
