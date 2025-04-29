@@ -1,0 +1,178 @@
+# Main simulation setup configs
+atom_style            granular
+boundary              f f f
+units                 si
+communicate           single vel yes
+newton                off
+processors            8 2 2
+
+log Logs/log.liggghts
+
+# Boundary definition
+variable xmin         equal -0.005
+variable xmax         equal 0.185
+variable ymin         equal -0.020
+variable ymax         equal 0.020
+variable zmin         equal -0.010
+variable zmax         equal 0.043
+
+# Entity definition
+variable natoms       equal 2      # 1 = particles; 2 = screw + body
+
+# Wall properties
+variable youngmodP    equal 5e6
+variable poissP       equal 0.4
+
+# Particle properties naming:
+#    PP  = Particle-Particle
+#    PW  = Particle-Wall (cylindrical hull of the GranuDrum)
+#    PSW = Particle-Sidewall (circular sides of the GranuDrum)
+variable fricPP       equal 0.720222    # Optimise as "sliding"
+variable fricPW       equal 0.720222    # Optimise
+variable fricPSW      equal 0.720222    # Optimise
+variable fric         equal 0.720222    # Dummy value, Wall-Sidewall
+variable fricRollPP   equal 0.043350    # Optimise as "rolling"
+variable fricRollPW   equal 0.043350    # Optimise
+variable fricRollPSW  equal 0.043350    # Optimise
+variable fricRoll     equal 0.043350    # Dummy value, Wall-Sidewall
+variable corPP        equal 0.664838    # Optimise
+variable corPW        equal 0.664838    # Optimise
+variable corPSW       equal 0.664838    # Optimise
+variable cor          equal 0.664838    # Dummy value, Wall-Sidewall
+
+# Particle numbers
+variable nradii       equal 10
+variable r0           equal 0.0005062582509797333
+variable r1           equal 0.0005177802426380415
+variable r2           equal 0.0005293022342963495
+variable r3           equal 0.0005408242259546577
+variable r4           equal 0.0005523462176129657
+variable r5           equal 0.0005638682092712741
+variable r6           equal 0.0005753902009295821
+variable r7           equal 0.0005869121925878904
+variable r8           equal 0.0005984341842461983
+variable r9           equal 0.0006099561759045066
+
+variable p0           equal 0.0470363356019434
+variable p1           equal 0.0833366607631768
+variable p2           equal 0.115760641276276
+variable p3           equal 0.12894742536281
+variable p4           equal 0.131547892682512
+variable p5           equal 0.127230105329478
+variable p6           equal 0.116190290449586
+variable p7           equal 0.0942282231366908
+variable p8           equal 0.0904330534426403
+variable p9           equal 0.0652893719548868
+
+variable dens         equal 1580.0
+
+# Define simulation timestep and total simulation time
+variable dt           equal 5e-6
+variable total_time   equal 20        # seconds
+variable threshold_time equal 10      # seconds (switch to fine dump resolution)
+
+# Filling parameters
+variable filltime     equal 30        # seconds
+variable fillmass     equal 0.25
+variable fillmassrate equal ${fillmass}/${total_time}
+
+# Convert simulation times to timesteps
+variable total_steps      equal ${total_time}/${dt}
+variable threshold_steps  equal ${threshold_time}/${dt}
+
+# Screw speed
+variable screwPeriod200   equal 60/200   # seconds (time for 1 rotation)
+variable screwPeriod600   equal 60/600    # seconds
+variable screwPeriod1000  equal 60/1000   # seconds
+
+# Defining simulation box
+region reg block ${xmin} ${xmax} ${ymin} ${ymax} ${zmin} ${zmax} units box
+create_box 2 reg
+neighbor 0.0016 bin
+neigh_modify delay 0 one 10000 page 500000
+
+# Contact model definition
+pair_style gran model hertz tangential history rolling_friction cdt
+pair_coeff * *
+timestep ${dt}
+fix integrator all nve/sphere
+fix gravi all gravity 9.81 vector 0.0 0.0 -1.0
+
+# Material property definition
+fix m1 all property/global youngsModulus peratomtype ${youngmodP} ${youngmodP}
+fix m2 all property/global poissonsRatio peratomtype ${poissP} ${poissP}
+fix m3 all property/global coefficientRestitution peratomtypepair ${natoms} ${corPP} ${corPP} ${corPP} ${corPP}
+fix m4 all property/global coefficientFriction peratomtypepair ${natoms} ${fricPP} ${fricPW} ${fricPW} ${fricPW}
+fix m5 all property/global coefficientRollingFriction peratomtypepair ${natoms} ${fricRollPP} ${fricRollPW} ${fricRollPW} ${fricRollPW}
+
+# Loading geometry
+fix chute all mesh/surface file Inputs/Meshes/Chutes/1PD_chute.stl type 2 scale 1 curvature_tolerant yes
+fix barrel all mesh/surface file Inputs/Meshes/Barrel/1PD_barrel.stl type 2 scale 1 curvature_tolerant yes
+fix screw_right all mesh/surface file Inputs/Meshes/Screws/1PD_N_screw_right.stl type 2 scale 0.001
+fix screw_left all mesh/surface file Inputs/Meshes/Screws/1PD_N_screw_left.stl type 2 scale 0.001
+fix walls all wall/gran model hertz tangential history rolling_friction cdt mesh n_meshes 4 meshes chute barrel screw_right screw_left
+
+# Screw spacing variables
+variable 1PD_screw_spacing equal 15.00347/2000
+variable 2PD_screw_spacing equal 15.56194/2000
+variable 3PD_screw_spacing equal 16.12041/2000
+variable 4PD_screw_spacing equal 16.67888/2000
+variable 5PD_screw_spacing equal 17.23735/2000
+
+fix moveScrew_right all move/mesh mesh screw_right rotate origin 0 ${1PD_screw_spacing} 0 axis 1.0 0.0 0.0 period ${screwPeriod200}
+fix moveScrew_left  all move/mesh mesh screw_left rotate origin 0 -${1PD_screw_spacing} 0 axis 1.0 0.0 0.0 period ${screwPeriod200}
+
+# Particle generation and insertion
+fix pts0 all particletemplate/sphere 1299709 atom_type 1 density constant ${dens} volume_limit 1.0e-14 radius constant ${r0}
+fix pts1 all particletemplate/sphere 1299721 atom_type 1 density constant ${dens} volume_limit 1.0e-14 radius constant ${r1}
+fix pts2 all particletemplate/sphere 1299743 atom_type 1 density constant ${dens} volume_limit 1.0e-14 radius constant ${r2}
+fix pts3 all particletemplate/sphere 1299763 atom_type 1 density constant ${dens} volume_limit 1.0e-14 radius constant ${r3}
+fix pts4 all particletemplate/sphere 1299791 atom_type 1 density constant ${dens} volume_limit 1.0e-14 radius constant ${r4}
+fix pts5 all particletemplate/sphere 1299811 atom_type 1 density constant ${dens} volume_limit 1.0e-14 radius constant ${r5}
+fix pts6 all particletemplate/sphere 1299817 atom_type 1 density constant ${dens} volume_limit 1.0e-14 radius constant ${r6}
+fix pts7 all particletemplate/sphere 1299821 atom_type 1 density constant ${dens} volume_limit 1.0e-14 radius constant ${r7}
+fix pts8 all particletemplate/sphere 1299827 atom_type 1 density constant ${dens} volume_limit 1.0e-14 radius constant ${r8}
+fix pts9 all particletemplate/sphere 1299833 atom_type 1 density constant ${dens} volume_limit 1.0e-14 radius constant ${r9}
+
+fix pdd all particledistribution/discrete/massbased 1299841 10 &
+    pts0 ${p0} pts1 ${p1} pts2 ${p2} pts3 ${p3} pts4 ${p4} &
+    pts5 ${p5} pts6 ${p6} pts7 ${p7} pts8 ${p8} pts9 ${p9}
+
+# Run 1: 86028157
+# Run 2: 10000019 
+# Run 3: 55000207 
+
+fix ins_mesh all mesh/surface/planar file Inputs/Meshes/EverythingElse/filler.stl type 1 scale 1
+fix ins all insert/stream seed 10000019 distributiontemplate pdd & 
+    mass ${fillmass} massrate ${fillmassrate} overlapcheck yes all_in yes vel constant 0 0 -0.3 & 
+    insertion_face ins_mesh extrude_length 0.03
+
+# Data dumping
+shell mkdir Outputs/Run2/sim_MCC_1PD_N_200
+
+# Define compute commands (they run continuously)
+compute fc all pair/gran/local pos vel id force force_normal force_tangential torque delta
+compute wc all wall/gran/local pos vel id force force_normal force_tangential torque delta
+
+# Define a dump interval (e.g., every 0.1s)
+variable dumptime equal 0.1
+variable dumpstep equal ${dumptime}/${dt}
+
+dump dmpparticle all custom/vtk ${dumpstep} &
+    Outputs/Run2/sim_MCC_1PD_N_200/particles_*.vtk id type x y z vx vy vz fx fy fz radius
+# dump dmpchute all mesh/stl ${dumpstep} &
+#     Outputs/Run2/sim_MCC_1PD_N_200/Hopper_*.stl chute
+# dump dmpbarrel all mesh/stl ${dumpstep} &
+#     Outputs/Run2/sim_MCC_1PD_N_200/Barrel_*.stl barrel
+dump dmpscrew_right all mesh/stl ${dumpstep} &
+    Outputs/Run2/sim_MCC_1PD_N_200/Screw_Right_*.stl screw_right
+dump dmpscrew_left all mesh/stl ${dumpstep} &
+    Outputs/Run2/sim_MCC_1PD_N_200/Screw_Left_*.stl screw_left
+dump cforce all local/gran/vtk ${dumpstep} &
+    Outputs/Run2/sim_MCC_1PD_N_200/pairs_*.vtk fc
+dump cwalls all local/gran/vtk ${dumpstep} &
+    Outputs/Run2/sim_MCC_1PD_N_200/walls_*.vtk wc
+
+# Run simulation until threshold time is reached
+run ${total_steps}
+
